@@ -111,3 +111,17 @@ export async function createTreasury(app: App, orgId: string, token: string) {
     label: 'Treasury',
   }) as Promise<{ id: string; stellarAddress: string }>;
 }
+
+export async function createClient(app: App, orgId: string, token: string) {
+  return createResource(app, `/v1/orgs/${orgId}/clients`, token, {
+    name: 'Acme Corp',
+  }) as Promise<{ id: string }>;
+}
+
+export async function createVendor(app: App, orgId: string, token: string) {
+  const { Keypair } = await import('@stellar/stellar-sdk');
+  return createResource(app, `/v1/orgs/${orgId}/vendors`, token, {
+    name: 'Supplier',
+    stellarAddress: Keypair.random().publicKey(),
+  }) as Promise<{ id: string; stellarAddress: string }>;
+}

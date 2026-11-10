@@ -39,6 +39,10 @@ describe('OpenAPI contract', () => {
       '/v1/orgs/{orgId}',
       '/v1/orgs/{orgId}/members',
       '/v1/orgs/{orgId}/members/{id}',
+      '/v1/orgs/{orgId}/clients',
+      '/v1/orgs/{orgId}/clients/{id}',
+      '/v1/orgs/{orgId}/vendors',
+      '/v1/orgs/{orgId}/vendors/{id}',
     ]) {
       expect(doc.paths[p], p).toBeDefined();
     }
