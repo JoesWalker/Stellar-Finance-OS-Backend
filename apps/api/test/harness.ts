@@ -1,5 +1,6 @@
 import { startTestDatabase, type TestDatabase } from '@finance-os/db/testing';
 import type { MemberRole } from '@finance-os/shared';
+import type { JobQueue } from '../src/plugins/jobs.js';
 import { buildServer } from '../src/server.js';
 import { FakeGateway, testStellarContext } from './fake-stellar.js';
 
@@ -13,10 +14,14 @@ export interface Harness {
 }
 
 /** A real API instance backed by a throwaway migrated Postgres. */
-export async function startHarness(): Promise<Harness> {
+export async function startHarness(opts: { jobs?: JobQueue } = {}): Promise<Harness> {
   const db = await startTestDatabase();
   const gateway = new FakeGateway();
-  const app = await buildServer({ prisma: db.prisma, stellar: testStellarContext(gateway) });
+  const app = await buildServer({
+    prisma: db.prisma,
+    stellar: testStellarContext(gateway),
+    ...(opts.jobs ? { jobs: opts.jobs } : {}),
+  });
   await app.ready();
   return {
     app,

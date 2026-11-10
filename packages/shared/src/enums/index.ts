@@ -10,3 +10,4 @@ export * from './payment-request-status.js';
 export * from './transaction-direction.js';
 export * from './transaction-status.js';
 export * from './transaction-match-status.js';
+export * from './invoice-transitions.js';

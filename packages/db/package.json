@@ -6,7 +6,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./test/postgres.ts"
+    "./testing": "./test/postgres.ts",
+    "./seed": "./src/seed/seed-demo.ts",
+    "./seed-data": "./src/seed/data.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -51,9 +51,14 @@ describe('OpenAPI contract', () => {
     }
   });
 
-  it('marks every non-login v1 operation as bearer-authenticated', () => {
+  it('marks every non-public v1 operation as bearer-authenticated', () => {
     expect(doc.components.securitySchemes.bearerAuth).toBeDefined();
-    const open = new Set(['/v1/auth/register', '/v1/auth/login']);
+    const open = new Set([
+      '/v1/auth/register',
+      '/v1/auth/login',
+      // Payment page: the unguessable token is the capability.
+      '/v1/public/invoices/{publicToken}',
+    ]);
     for (const { path, method, op } of v1Ops()) {
       if (open.has(path)) continue;
       expect(op.security, `${method} ${path}`).toEqual([{ bearerAuth: [] }]);

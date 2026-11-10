@@ -13,3 +13,10 @@ export interface MatchTransactionJob {
 }
 
 export type OverdueInvoicesJob = Record<string, never>;
+
+/** Body only — delivery is the worker's concern. The worker looks the recipient up. */
+export interface SendEmailJob {
+  kind: 'invoice_sent';
+  organizationId: string;
+  invoiceId: string;
+}
