@@ -5,12 +5,21 @@ import {
   createClient,
   createTreasury,
   createVendor,
+  createResource,
+  createTreasury,
   orgWithAllRoles,
   startHarness,
   type Harness,
 } from './harness.js';
 
 const VENDOR_ADDRESS = Keypair.random().publicKey();
+const invoiceBody = (clientId: string, treasuryAccountId: string) => ({
+  clientId,
+  treasuryAccountId,
+  assetCode: 'XLM',
+  dueDate: '2030-01-01',
+  lineItems: [{ description: 'x', quantity: '1', unitPrice: '1' }],
+});
 
 /**
  * AGENTS.md rule 3: every org-scoped route must refuse callers from another
@@ -22,6 +31,9 @@ describe('cross-org access', () => {
   let b: Awaited<ReturnType<typeof orgWithAllRoles>>;
   /** Resources owned by org B. */
   const bIds = {} as { treasury: string; client: string; vendor: string };
+  const bIds = {} as { treasury: string; client: string; invoice: string };
+  let aTreasury: string;
+  let aClient: string;
 
   beforeAll(async () => {
     h = await startHarness();
@@ -30,6 +42,16 @@ describe('cross-org access', () => {
     bIds.treasury = (await createTreasury(h.app, b.org.id, b.users.owner.token)).id;
     bIds.client = (await createClient(h.app, b.org.id, b.users.owner.token)).id;
     bIds.vendor = (await createVendor(h.app, b.org.id, b.users.owner.token)).id;
+    aTreasury = (await createTreasury(h.app, a.org.id, a.users.owner.token)).id;
+    const client = (organizationId: string) =>
+      h.db.prisma.client.create({ data: { organizationId, name: 'C' } }).then((c) => c.id);
+    bIds.client = await client(b.org.id);
+    aClient = await client(a.org.id);
+    bIds.invoice = (
+      await createResource(h.app, `/v1/orgs/${b.org.id}/invoices`, b.users.owner.token, {
+        ...invoiceBody(bIds.client, bIds.treasury),
+      })
+    ).id;
   });
   afterAll(() => h.close());
 
@@ -72,6 +94,21 @@ describe('cross-org access', () => {
         payload: { name: 'pwned' },
       },
       { method: 'DELETE', url: `/v1/orgs/${b.org.id}/vendors/${bIds.vendor}` },
+      { method: 'GET', url: `/v1/orgs/${b.org.id}/invoices` },
+      {
+        method: 'POST',
+        url: `/v1/orgs/${b.org.id}/invoices`,
+        payload: invoiceBody(bIds.client, bIds.treasury),
+      },
+      { method: 'GET', url: `/v1/orgs/${b.org.id}/invoices/${bIds.invoice}` },
+      {
+        method: 'PATCH',
+        url: `/v1/orgs/${b.org.id}/invoices/${bIds.invoice}`,
+        payload: { notes: 'pwned' },
+      },
+      { method: 'DELETE', url: `/v1/orgs/${b.org.id}/invoices/${bIds.invoice}` },
+      { method: 'POST', url: `/v1/orgs/${b.org.id}/invoices/${bIds.invoice}/send` },
+      { method: 'POST', url: `/v1/orgs/${b.org.id}/invoices/${bIds.invoice}/void` },
     ] as const;
 
   it('returns 404 to an owner of another org on every org route', async () => {
@@ -119,6 +156,33 @@ describe('cross-org access', () => {
       headers: token,
     });
     expect(list.json().items).toEqual([]);
+  it("cannot reach another org's invoice through its own org id", async () => {
+    const own = `/v1/orgs/${a.org.id}/invoices/${bIds.invoice}`;
+    const token = bearer(a.users.owner.token);
+    for (const res of await Promise.all([
+      h.app.inject({ method: 'GET', url: own, headers: token }),
+      h.app.inject({ method: 'PATCH', url: own, headers: token, payload: { notes: 'pwned' } }),
+      h.app.inject({ method: 'DELETE', url: own, headers: token }),
+      h.app.inject({ method: 'POST', url: `${own}/send`, headers: token }),
+      h.app.inject({ method: 'POST', url: `${own}/void`, headers: token }),
+    ])) {
+      expect(res.statusCode).toBe(404);
+    }
+    const inv = await h.db.prisma.invoice.findUniqueOrThrow({ where: { id: bIds.invoice } });
+    expect(inv.status).toBe('draft');
+    expect(inv.notes).toBeNull();
+  });
+
+  it("an invoice can't reference another org's client or treasury account", async () => {
+    const url = `/v1/orgs/${a.org.id}/invoices`;
+    const token = bearer(a.users.owner.token);
+    for (const payload of [
+      invoiceBody(bIds.client, aTreasury),
+      invoiceBody(aClient, bIds.treasury),
+    ]) {
+      const res = await h.app.inject({ method: 'POST', url, headers: token, payload });
+      expect(res.statusCode).toBe(404);
+    }
   });
 
   it("cannot reach another org's member through its own org id", async () => {
